@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import axios from "axios";
 import {
   Form,
   FormControl,
@@ -52,10 +53,9 @@ export function BookingForm() {
       description: "",
     },
   });
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    // Do something with the form values.
-    // ✅ This will be type-safe and validated.
-    console.log(values);
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    const res = await axios.post("/api/book", values);
+    console.log("response", res);
   }
   return (
     <Card className="w-full max-w-sm">
@@ -138,7 +138,11 @@ export function BookingForm() {
               <Button className="cursor-pointer" type="submit">
                 Submit
               </Button>
-              <Button variant={"secondary"} className="cursor-pointer" onClick={() => router.back()}>
+              <Button
+                variant={"secondary"}
+                className="cursor-pointer"
+                onClick={() => router.back()}
+              >
                 Back
               </Button>
             </CardFooter>
