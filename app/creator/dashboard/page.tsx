@@ -13,6 +13,7 @@ import { generateBlinkUrl } from '@/lib/utils'
 import { createWebhook } from '@/lib/helius'
 import { WalletConnectButton } from '@/components/walletConnectButton'
 import { BlinkShare } from '@/components/blink'
+import Loading from '@/app/loading'
 
 interface Meeting {
   id: string
@@ -42,7 +43,7 @@ export default function CreatorDashboard() {
       .finally(() => setLoading(false))
   }, [publicKey])
 
-  if (loading) return <div className="container mx-auto py-8">Loading...</div>
+  if (loading) return <div className="container mx-auto py-8"><Loading/></div>
 
   return (
     <div className="container mx-auto py-8">

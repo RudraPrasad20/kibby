@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import Loading from '@/app/loading'
 
 interface Booking {
   id: string
@@ -47,7 +48,7 @@ export default function MeetingDetails() {
       .finally(() => setLoading(false))
   }, [slug])
 
-  if (loading) return <div className="container mx-auto py-8">Loading...</div>
+  if (loading) return <div className="container mx-auto py-8"><Loading/></div>
   if (!meeting) return <div className="container mx-auto py-8">Meeting not found</div>
 
   return (

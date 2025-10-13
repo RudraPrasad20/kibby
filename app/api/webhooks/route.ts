@@ -1,9 +1,27 @@
-// app/api/webhooks/route.ts (Corrected for Helius payload)
+// app/api/webhooks/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature } from '@/lib/helius';
 import { db } from '@/lib/db';
 
 const WEBHOOK_SECRET = 'my-secret-token'; // Matches authHeader from creation
+
+interface HeliusTransaction {
+  type: string;
+  signature: string;
+  transactionError: Error; // Helius error type
+  instructions?: Array<{
+    programId: string;
+    data: string;
+  }>;
+  nativeTransfers?: Array<{
+    amount: number;
+    toUserAccount: string;
+  }>;
+  accountData?: Array<{
+    account: string;
+    nativeBalanceChange: number;
+  }>;
+}
 
 export async function POST(request: NextRequest) {
   const payload = await request.text(); // Raw body for HMAC
@@ -15,7 +33,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const txs = JSON.parse(payload); // Array of tx objects (not 'events' with sub-'transactions')
+    const txs: HeliusTransaction[] = JSON.parse(payload); // Array of tx objects (not 'events' with sub-'transactions')
 
     for (const tx of txs) { // Direct loop over tx array
       if (tx.type !== 'TRANSFER' || tx.transactionError !== null) continue; // Skip non-transfers or errors
@@ -25,7 +43,7 @@ export async function POST(request: NextRequest) {
 
       // Find memo instruction
       const memoIx = tx.instructions?.find(
-        (ix: any) => ix.programId === 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr' && ix.data
+        (ix: { programId: string; data: string }) => ix.programId === 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr' && ix.data
       );
       let bookingId: string | null = null;
       if (memoIx) {
@@ -41,10 +59,10 @@ export async function POST(request: NextRequest) {
       if (!bookingId) continue;
 
       // Check for successful native SOL transfer (to any monitored creator, via nativeTransfers)
-      const successfulTransfer = tx.nativeTransfers?.some((t: any) => 
+      const successfulTransfer = tx.nativeTransfers?.some((t: { amount: number; toUserAccount: string }) => 
         t.amount > 0 && // Positive incoming
         t.toUserAccount && // To a user account (creator)
-        tx.accountData?.some((acc: any) => acc.account === t.toUserAccount && acc.nativeBalanceChange > 0) // Confirm balance change
+        tx.accountData?.some((acc: { account: string; nativeBalanceChange: number }) => acc.account === t.toUserAccount && acc.nativeBalanceChange > 0) // Confirm balance change
       );
 
       if (successfulTransfer) {

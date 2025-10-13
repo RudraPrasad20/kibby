@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { WalletConnectButton } from '@/components/walletConnectButton'
+import Loading from '@/app/loading'
 
 
 
@@ -97,7 +98,7 @@ export default function BookMeeting() {
     setBooking(false)
   }
 
-  if (loading) return <div className="container mx-auto py-8">Loading...</div>
+  if (loading) return <div className="container mx-auto py-8"><Loading/></div>
   if (!meeting) return <div className="container mx-auto py-8">Meeting not found</div>
 
   return (

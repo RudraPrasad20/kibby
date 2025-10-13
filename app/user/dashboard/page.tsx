@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 
 import { Badge } from '@/components/ui/badge'
 import { WalletConnectButton } from '@/components/walletConnectButton'
+import Loading from '@/app/loading'
 
 interface Booking {
   id: string
@@ -50,7 +51,7 @@ export default function UserDashboard() {
       .finally(() => setLoading(false))
   }, [publicKey])
 
-  if (loading) return <div className="container mx-auto py-8">Loading...</div>
+  if (loading) return <div className="container mx-auto py-8"><Loading/></div>
 
   return (
     <div className="container mx-auto py-8">
