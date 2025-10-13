@@ -13,12 +13,67 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model BookingDetails {
+// model User {
+//   id            String    @id @default(cuid())
+//   walletAddress String    @unique
+//   name          String?   // optional display name from form
+//   email         String?   // optional email from form
+//   createdAt     DateTime  @default(now())
+//   meetings      Meeting[] @relation("UserMeetings")
+//   bookings      Booking[] @relation("UserBookings")
+// }
+
+// model Meeting {
+//   id             String    @id @default(cuid())
+//   title          String
+//   description    String?
+//   priceSol       Float?    // how much to pay for NFT or meeting
+//   nftMintAddress String?   // if minted NFT associated with meeting
+//   durationMinutes Int?     // optional duration of the meeting
+//   creator        User      @relation("UserMeetings", fields: [creatorId], references: [id])
+//   creatorId      String
+//   bookings       Booking[] @relation("MeetingBookings")
+//   createdAt      DateTime  @default(now())
+// }
+
+// model Booking {
+//   id             String   @id @default(cuid())
+//   user           User     @relation("UserBookings", fields: [userId], references: [id])
+//   userId         String
+//   meeting        Meeting  @relation("MeetingBookings", fields: [meetingId], references: [id])
+//   meetingId      String
+//   scheduledFor   DateTime
+//   txHash         String?  // solana transaction hash
+//   nftMintAddress String?  // minted NFT proof
+//   memo           String?  // payment memo / transaction reference
+//   bookedAt       DateTime @default(now())
+// }
+
+model Meeting {
   id          String   @id @default(cuid())
-  name        String
-  email       String
-  wallet      String   @db.VarChar(44)
-  date_time   DateTime
+  title       String
   description String?
+  duration    Int      // in minutes
+  price       Float    // in lamports? No, in SOL, but handle conversion in code
+  creatorWallet String
+  slug        String   @unique // for URL-friendly id, generate on create
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  bookings    Booking[]
+
+  @@map("meetings")
+}
+
+model Booking {
+  id               String   @id @default(cuid())
+  meetingId        String
+  userWallet       String
+  bookedAt         DateTime @default(now())
+  status           String   @default("pending") // pending, confirmed, cancelled
+  transactionSig   String?  // Solana tx signature for verification
+
+  meeting          Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userWallet])
+  @@map("bookings")
 }

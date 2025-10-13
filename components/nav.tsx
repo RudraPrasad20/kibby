@@ -1,7 +1,9 @@
+"use client"
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { ModeToggle } from "./modeToggle";
 import { Button } from "./ui/button";
+import { ArrowRight } from "lucide-react";
 
 export function Nav() {
   return (
@@ -27,9 +29,7 @@ export function Nav() {
       </div>
       <div className="flex items-center space-x-4">
         <ModeToggle />
-        <Button className=" rounded-full px-6 py-3 text-sm font-medium">
-          Connect <ArrowRight />
-        </Button>
+      <Button>Get Started <ArrowRight/></Button>
       </div>
     </header>
   );
