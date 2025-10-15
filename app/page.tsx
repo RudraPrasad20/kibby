@@ -1,10 +1,18 @@
 // app/page.tsx
 
+import { BlinkShare } from "@/components/blink";
+import { BlinkPreview } from "@/components/blinkPreview";
 import { WalletConnectButton } from "@/components/walletConnectButton";
 import Link from "next/link";
 
 
 export default function Home() {
+  const meeting = {
+    title: "ddj",
+    price: 90,
+    iconUrl: ""
+  }
+  const blinkUrl = "https://"
   return (
     <div className="container mx-auto py-8">
       <WalletConnectButton />
@@ -20,6 +28,13 @@ export default function Home() {
           <p>Book meetings with SOL.</p>
           <p>Share a link like /meet/[slug] to book.</p>
         </div>
+        <BlinkShare url={blinkUrl} />  
+                <BlinkPreview  // <-- Here: Mock UI preview
+                  title={meeting.title}
+                  price={meeting.price}
+                  iconUrl={meeting.iconUrl}
+                  blinkUrl={blinkUrl}
+                />
       </div>
     </div>
   )

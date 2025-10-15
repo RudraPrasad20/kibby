@@ -1,17 +1,19 @@
-// app/creator/page.tsx (Fixed form with shadcn and parsing)
+// app/creator/page.tsx (full updated file)
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
-import { WalletConnectButton } from '@/components/walletConnectButton'
+
 import Link from 'next/link'
+import { useDropzone } from 'react-dropzone' // npm i react-dropzone
 
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -25,6 +27,7 @@ import { Input } from "@/components/ui/input"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
+import { WalletConnectButton } from '@/components/walletConnectButton'
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -38,6 +41,7 @@ type FormData = z.infer<typeof formSchema>
 export default function CreateMeeting() {
   const { publicKey } = useWallet()
   const [loading, setLoading] = useState(false)
+  const [iconFile, setIconFile] = useState<File | null>(null)
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -49,13 +53,23 @@ export default function CreateMeeting() {
     },
   })
 
+  // Dropzone for icon upload
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    setIconFile(acceptedFiles[0] || null)
+  }, [])
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'image/*': [] },
+    maxFiles: 1,
+  })
+
   async function onSubmit(values: FormData) {
     if (!publicKey) {
       toast("Connect wallet first")
       return
     }
 
-    // Parse string values to numbers for Db (Int and Float)
     const parsedValues = {
       ...values,
       duration: parseInt(values.duration, 10),
@@ -64,14 +78,31 @@ export default function CreateMeeting() {
 
     setLoading(true)
     try {
+      // Upload icon if provided (Vercel Blob)
+      let iconUrl = undefined
+      if (iconFile) {
+        const formData = new FormData()
+        formData.append('file', iconFile)
+        const uploadRes = await fetch('/api/upload-icon', { // New endpoint below
+          method: 'POST',
+          body: formData,
+        })
+        if (uploadRes.ok) {
+          iconUrl = await uploadRes.text()
+        } else {
+          toast("Icon upload failed, using default")
+        }
+      }
+
       const res = await fetch('/api/meetings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...parsedValues, creatorWallet: publicKey.toBase58() })
+        body: JSON.stringify({ ...parsedValues, creatorWallet: publicKey.toBase58(), iconUrl })
       })
       if (res.ok) {
         toast("Meeting created!")
         form.reset()
+        setIconFile(null)
       } else {
         const errorData = await res.json()
         toast(errorData.error || "Failed to create meeting")
@@ -93,6 +124,7 @@ export default function CreateMeeting() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              {/* Existing fields: title, description, duration, price */}
               <FormField
                 control={form.control}
                 name="title"
@@ -164,6 +196,7 @@ export default function CreateMeeting() {
                   </FormItem>
                 )}
               />
+          
               <Button type="submit" disabled={loading || !publicKey} className="w-full">
                 {loading ? 'Creating...' : 'Create Meeting'}
               </Button>

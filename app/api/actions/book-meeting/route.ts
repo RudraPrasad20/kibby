@@ -41,7 +41,6 @@ export const OPTIONS = async () => {
 
 // GET endpoint returns the Blink metadata (JSON) and UI configuration
 export const GET = async (req: Request) => {
-  // Extract meetingId from URL params
   const url = new URL(req.url);
   const meetingId = url.searchParams.get("meetingId");
 
@@ -53,10 +52,9 @@ export const GET = async (req: Request) => {
   }
 
   try {
-    // Fetch meeting details from database
     const meeting = await db.meeting.findUnique({
       where: { id: meetingId },
-      select: { title: true, price: true, creatorWallet: true }
+      select: { title: true, price: true, creatorWallet: true, imageUrl: true }  // Add iconUrl
     });
 
     if (!meeting) {
@@ -66,43 +64,25 @@ export const GET = async (req: Request) => {
       });
     }
 
-    // This JSON is used to render the Blink UI
+    const baseUrl = url.origin;  // e.g., https://kibby.vercel.app
+
     const response: ActionGetResponse = {
       type: "action",
-      icon: `${new URL("/meeting-icon.png", req.url).toString()}`, // Replace with your meeting icon
-      label: `${meeting.price} SOL`,
+      icon: "/public/vercel.svg",  // Dynamic/custom
+      label: "Trusted by Kibby",
       title: `Book ${meeting.title}`,
       description: `Pay ${meeting.price} SOL to book a ${meeting.title} meeting.`,
-      // Links is used if you have multiple actions or if you need more than one params
       links: {
         actions: [
           {
-            // Defines this as a blockchain transaction
             type: "transaction",
             label: `${meeting.price} SOL`,
-            // This is the endpoint for the POST request
-            href: `/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}`,
-          },
-          {
-            // Example for a custom input field (in case user wants to tip extra)
-            type: "transaction",
-            href: `/api/actions/book-meeting?meetingId=${meetingId}&amount={amount}`,
-            label: "Book with Custom Amount",
-            parameters: [
-              {
-                name: "amount",
-                label: `Enter SOL amount (min ${meeting.price})`,
-                type: "number",
-                min: meeting.price, // Set minimum to enforce at least the meeting price
-                required: true,
-              },
-            ],
+            href: `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}`,  // Absolute
           },
         ],
       },
     };
 
-    // Return the response with proper headers
     return new Response(JSON.stringify(response), {
       status: 200,
       headers,

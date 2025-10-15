@@ -1,4 +1,3 @@
-// app/creator/dashboard/page.tsx (With Blink integration)
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -8,18 +7,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
 import { Badge } from '@/components/ui/badge'
-
+// New: Mock preview
 import { generateBlinkUrl } from '@/lib/utils'
 import { createWebhook } from '@/lib/helius'
 import { WalletConnectButton } from '@/components/walletConnectButton'
 import { BlinkShare } from '@/components/blink'
-import Loading from '@/app/loading'
+import { BlinkPreview } from '@/components/blinkPreview'
 
 interface Meeting {
   id: string
   title: string
   slug: string
   price: number
+  iconUrl?: string  // New: For Blink icon
   createdAt: string
   bookings: { id: string }[]
 }
@@ -33,7 +33,6 @@ export default function CreatorDashboard() {
   useEffect(() => {
     if (!publicKey) return
 
-    // Create webhook for Helius (one-time setup for demo)
     createWebhook(`${baseUrl}/api/webhooks`).catch(console.error)
 
     fetch(`/api/meetings?wallet=${publicKey.toBase58()}&type=creator`)
@@ -41,9 +40,9 @@ export default function CreatorDashboard() {
       .then(setMeetings)
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [publicKey])
+  }, [publicKey, baseUrl])
 
-  if (loading) return <div className="container mx-auto py-8"><Loading/></div>
+  if (loading) return <div className="container mx-auto py-8">Loading...</div>
 
   return (
     <div className="container mx-auto py-8">
@@ -62,13 +61,19 @@ export default function CreatorDashboard() {
                   <Badge>{meeting.bookings.length} bookings</Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
                 <p>Price: {meeting.price} SOL</p>
                 <p>Share: /meet/{meeting.slug}</p>
-                <p>Blink URL: <a href={blinkUrl} className="text-blue-600 hover:underline break-all">{blinkUrl}</a></p>
-                <BlinkShare url={blinkUrl} />
+                <p className="text-sm">Blink URL: <a href={blinkUrl} className="text-blue-600 hover:underline break-all">{blinkUrl}</a></p>
+                <BlinkShare url={blinkUrl} />  
+                <BlinkPreview  // <-- Here: Mock UI preview
+                  title={meeting.title}
+                  price={meeting.price}
+                  iconUrl={meeting.iconUrl}
+                  blinkUrl={blinkUrl}
+                />
                 <Link href={`/creator/${meeting.slug}`}>
-                  <Button variant="outline" className="mt-2">View Details</Button>
+                  <Button variant="outline" className="w-full">View Details</Button>
                 </Link>
               </CardContent>
             </Card>
