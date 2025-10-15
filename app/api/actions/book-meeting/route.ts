@@ -54,7 +54,7 @@ export const GET = async (req: Request) => {
   try {
     const meeting = await db.meeting.findUnique({
       where: { id: meetingId },
-      select: { title: true, price: true, creatorWallet: true, imageUrl: true }  // Add iconUrl
+      select: { title: true, price: true, creatorWallet: true }  // Add iconUrl
     });
 
     if (!meeting) {
