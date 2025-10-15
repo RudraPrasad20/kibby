@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { title, description, duration, price, creatorWallet, imageUrl } = body
+    const { title, description, duration, price, creatorWallet } = body
 
     if (!title || !duration || !price || !creatorWallet) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
@@ -50,7 +50,6 @@ export async function POST(request: NextRequest) {
         price,
         creatorWallet,
         slug,
-        imageUrl
       }
     })
 
