@@ -11,8 +11,6 @@ import { toast } from 'sonner'
 import { WalletConnectButton } from '@/components/walletConnectButton'
 import Loading from '@/app/loading'
 
-
-
 interface Meeting {
   id: string
   title: string

@@ -53,7 +53,6 @@ model Meeting {
   id          String   @id @default(cuid())
   title       String
   description String?
-  imageUrl       String?
   duration    Int      // in minutes
   price       Float    // in lamports? No, in SOL, but handle conversion in code
   creatorWallet String

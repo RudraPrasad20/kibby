@@ -1,33 +1,28 @@
-// app/creator/page.tsx (full updated file)
+// app/creator/page.tsx (full updated file with Blink integration)
 'use client'
 
-import { useState, useCallback } from 'react'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
-
 import Link from 'next/link'
-import { useDropzone } from 'react-dropzone' // npm i react-dropzone
-
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
-
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { WalletConnectButton } from '@/components/walletConnectButton'
+import { useState } from 'react'
+import QRCode from 'react-qr-code'  // NEW: For QR generation (npm i qrcode.react)
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -42,26 +37,17 @@ export default function CreateMeeting() {
   const { publicKey } = useWallet()
   const [loading, setLoading] = useState(false)
   const [iconFile, setIconFile] = useState<File | null>(null)
+  // NEW: State for Blink URL
+  const [blinkUrl, setBlinkUrl] = useState('')
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: "",
       description: "",
-      duration: "15",
+      duration: "30",
       price: "0.1",
     },
-  })
-
-  // Dropzone for icon upload
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    setIconFile(acceptedFiles[0] || null)
-  }, [])
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'image/*': [] },
-    maxFiles: 1,
   })
 
   async function onSubmit(values: FormData) {
@@ -100,9 +86,16 @@ export default function CreateMeeting() {
         body: JSON.stringify({ ...parsedValues, creatorWallet: publicKey.toBase58(), iconUrl })
       })
       if (res.ok) {
+        const meetingData = await res.json()  // NEW: Parse response to get meeting.id
         toast("Meeting created!")
         form.reset()
         setIconFile(null)
+
+        // NEW: Generate Blink URL after creation
+        const baseUrl = window.location.origin  // e.g., https://kibby.vercel.app
+        const generatedBlinkUrl = `${baseUrl}/api/actions/book-meeting?meetingId=${meetingData.id}&amount=${parsedValues.price}`
+        setBlinkUrl(generatedBlinkUrl)
+        toast.success(`Blink ready: ${generatedBlinkUrl}`)
       } else {
         const errorData = await res.json()
         toast(errorData.error || "Failed to create meeting")
@@ -204,6 +197,30 @@ export default function CreateMeeting() {
           </Form>
         </CardContent>
       </Card>
+
+      {/* NEW: Blink Display Section */}
+      {blinkUrl && (
+        <Card className="max-w-md mx-auto mt-6">
+          <CardHeader>
+            <CardTitle>Blink Ready to Share!</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Input value={blinkUrl} readOnly className="text-xs" />
+            <Button 
+              onClick={() => {
+                navigator.clipboard.writeText(blinkUrl)
+                toast.success('Blink copied!')
+              }} 
+              className="w-full"
+            >
+              Copy Blink Link
+            </Button>
+            <QRCode value={blinkUrl} size={200} className="mx-auto" />
+            <p className="text-sm text-muted-foreground">Share on X, Discord, or scan for instant booking!</p>
+          </CardContent>
+        </Card>
+      )}
+
       {publicKey && <Link href='/creator/dashboard' className="block mt-4 text-blue-600 hover:underline">View Dashboard</Link>}
     </div>
   )

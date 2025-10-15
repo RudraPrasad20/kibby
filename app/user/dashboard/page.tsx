@@ -1,4 +1,4 @@
-// app/user/dashboard/page.tsx
+// app/user/dashboard/page.tsx (minor tweaks for consistency)
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -19,8 +19,9 @@ interface Booking {
     slug?: string
     price: number
   }
-  bookedAt: string
+  bookedAt: string  // Assuming this maps to createdAt in Prisma
   status: string
+  transactionSig: string
 }
 
 export default function UserDashboard() {
@@ -71,6 +72,7 @@ export default function UserDashboard() {
             <CardContent>
               <p>Price: {booking.meeting.price} SOL</p>
               <p>Date: {new Date(booking.bookedAt).toLocaleDateString()}</p>
+              <p>Tx: {booking.transactionSig ? `${booking.transactionSig.slice(0, 8)}...` : 'Pending'}</p> 
               {booking.meeting.slug && (
                 <Link href={`/meet/${booking.meeting.slug}`}>
                   <Button variant="outline" className="mt-2">View Meeting</Button>
@@ -81,6 +83,8 @@ export default function UserDashboard() {
         ))}
       </div>
       {bookings.length === 0 && <p>No bookings yet.</p>}
+      {/* Optional: Link to creator if user is creator */}
+      <Link href='/creator/dashboard' className="block mt-4 text-blue-600 hover:underline">Creator Dashboard</Link>
     </div>
   )
 }

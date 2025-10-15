@@ -1,4 +1,4 @@
-// app/api/bookings/route.ts
+// app/api/bookings/route.ts (no major changes; added comment for webhook integration)
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
           }
         }
       },
-      orderBy: { bookedAt: 'desc' }
+      orderBy: { bookedAt: 'desc' }  // Note: Ensure Prisma has bookedAt or map to createdAt
     })
 
     console.log('Bookings API response:', bookings)
@@ -69,3 +69,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create booking' }, { status: 500 })
   }
 }
+
+// Note: For webhook updates (e.g., from Helius), add a PUT route like:
+// export async function PUT(request: NextRequest) {
+//   const { id, status, transactionSig } = await request.json();
+//   const booking = await db.booking.update({ where: { id }, data: { status, transactionSig } });
+//   return NextResponse.json(booking);
+// }
