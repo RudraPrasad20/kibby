@@ -68,7 +68,7 @@ export const GET = async (req: Request) => {
 
     const response: ActionGetResponse = {
       type: "action",
-      icon: `${new URL("/vercel.svg", req.url).toString()}`,  // Dynamic/custom
+      icon: `${new URL("/public/next.svg", req.url).toString()}`,  // Dynamic/custom
       label: "Trusted by Kibby",
       title: `Book ${meeting.title}`,
       description: `Pay ${meeting.price} SOL to book a ${meeting.title} meeting.`,

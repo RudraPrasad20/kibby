@@ -19,6 +19,6 @@ export function generateSlug(title: string): string {
   return slugify(title, { lower: true, strict: true }) + '-' + Date.now().toString(36)
 }
 
-export function generateBlinkUrl(baseUrl: string, meetingId: string): string {
-  return `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}`;
+export function generateBlinkUrl(baseUrl: string, meetingId: string, amount: number): string {
+  return `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${amount}`;
 }

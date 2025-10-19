@@ -1,9 +1,7 @@
 'use client'
 import { Button } from '@/components/ui/button'
-import QRcode from "react-qr-code" // Fixed import
-import { Clipboard, Link } from 'lucide-react'
+import { Clipboard } from 'lucide-react'
 import { toast } from 'sonner'
-import { PublicKey } from '@solana/web3.js'  // npm i @solana/web3.js
 import QRCode from 'react-qr-code'
 
 interface Props {

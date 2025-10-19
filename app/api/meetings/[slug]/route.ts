@@ -30,3 +30,36 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to fetch meeting' }, { status: 500 })
   }
 }
+
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ slug: string }> }
+) {
+  try {
+    const { slug } = await params
+    const body = await request.json()
+    const { wallet } = body
+
+    if (!wallet) {
+      return NextResponse.json({ error: 'Wallet required' }, { status: 401 })
+    }
+
+    const meeting = await db.meeting.findUnique({
+      where: { slug }
+    })
+
+    if (!meeting || meeting.creatorWallet !== wallet) {
+      return NextResponse.json({ error: 'Not authorized to delete this meeting' }, { status: 403 })
+    }
+
+    await db.meeting.delete({
+      where: { slug }
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Delete meeting error:', error)
+    return NextResponse.json({ error: 'Failed to delete meeting' }, { status: 500 })
+  }
+}
