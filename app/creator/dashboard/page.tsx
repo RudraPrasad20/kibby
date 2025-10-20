@@ -24,6 +24,17 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { CopyIcon } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface Meeting {
   id: string
@@ -42,8 +53,6 @@ export default function CreatorDashboard() {
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
 
   const handleDelete = async (meetingId: string) => {
-    if (!confirm('Are you sure you want to delete this meeting? This action cannot be undone.')) return
-
     try {
       await axios.delete(`/api/meetings/${meetingId}`, {
         data: { wallet: publicKey?.toBase58() }
@@ -167,21 +176,40 @@ export default function CreatorDashboard() {
                       </DialogContent>
                     </Dialog>
                   </div>
-                  <Button
-                    variant="destructive"
-                    onClick={() => handleDelete(meeting.slug)}
-                    className="w-full cursor-pointer"
-                  >
-                    Delete Meeting
-                  </Button>
+                  {/* AlertDialog for Delete Confirmation */}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="destructive"
+                        className="w-full cursor-pointer"
+                      >
+                        Delete Meeting
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action cannot be undone. This will permanently delete your
+                          meeting &quot;{meeting.title}&quot; and all associated bookings.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(meeting.slug)}>
+                          Continue
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </CardFooter>
               </Card>
             )
           })
         ) : (
           <div className="col-span-full flex flex-col items-center justify-center py-16 bg-gray-200 dark:bg-gray-800 rounded-lg shadow-inner">
-            <p className="text-xl font-semibold text-gray-600 dark:text-gray-300 mb-4">You haven not created any meetings yet.</p>
-            <Link href="/creator">
+            <p className="text-xl font-semibold text-gray-600 dark:text-gray-300 mb-4">You haven&apos;t created any meetings yet.</p>
+            <Link href="/creator/create">
               <Button size="lg" className='cursor-pointer'>Create Your First Meeting</Button>
             </Link>
             <p className="mt-8 text-gray-500 dark:text-gray-400 text-sm">

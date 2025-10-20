@@ -75,7 +75,6 @@ export default function UserDashboard() {
         <p className="text-lg text-gray-700 dark:text-gray-300 mb-8">
           Connect your wallet to view your scheduled meetings.
         </p>
-        <WalletConnectButton />
       </div>
     )
   }

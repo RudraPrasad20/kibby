@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       orderBy: { bookedAt: 'desc' }  // Note: Ensure Prisma has bookedAt or map to createdAt
     })
 
-    console.log('Bookings API response:', bookings)
+    // console.log('Bookings API response:', bookings)
 
     return NextResponse.json(bookings)
   } catch (error) {
