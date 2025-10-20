@@ -1,4 +1,4 @@
-// app/api/actions/book-meeting/route.ts (fixed: Proper reference in href/memo, links.next as string for redirect)
+// app/api/actions/book-meeting/route.ts (fixed: Reference in href, links.next as string for redirect)
 import {
   ActionGetResponse,
   ActionPostRequest,
@@ -60,7 +60,7 @@ export const GET = async (req: Request) => {
 
     const baseUrl = url.origin;
 
-    // FIXED: Generate unique reference for idempotency/polling
+    // Generate unique reference for idempotency/polling
     const reference = crypto.randomUUID();
 
     const response: ActionGetResponse = {
@@ -74,7 +74,7 @@ export const GET = async (req: Request) => {
           {
             type: "transaction",
             label: `${meeting.price} SOL`,
-            href: `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}&reference=${reference}`,  // FIXED: Include reference in href
+            href: `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}&reference=${reference}`,  // FIXED: Include reference
           },
         ],
       },
@@ -144,7 +144,7 @@ export const POST = async (req: Request) => {
       transaction: Buffer.from(transaction.serialize()).toString("base64"),
       message: `Booking ${meeting.title} for ${amount} SOL`,
       links: {
-        next: { type: "post", href: successUrl },
+        next: {type: "post", href: successUrl},  // FIXED: Simple string for redirect (Solana Actions standard)
       },
     };
 

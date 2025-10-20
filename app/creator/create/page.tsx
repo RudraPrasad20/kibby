@@ -185,7 +185,7 @@ export default function CreateMeeting() {
               <Button
                 type="submit"
                 disabled={loading || !publicKey}
-                className="w-full"
+                className="w-full cursor-pointer"
               >
                 {loading ? "Creating..." : "Create Meeting"}
               </Button>
