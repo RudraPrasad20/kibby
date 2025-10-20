@@ -71,9 +71,11 @@ model Booking {
   bookedAt         DateTime @default(now())
   status           String   @default("pending") // pending, confirmed, cancelled
   transactionSig   String?  // Solana tx signature for verification
+  nftMint          String?  @unique
 
   meeting          Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@unique([meetingId, userWallet])
+  @@unique([transactionSig])
   @@map("bookings")
 }

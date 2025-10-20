@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 const HELIUS_API =process.env.NEXT_PUBLIC_RPC_URL!;
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY!;
 
-export async function createWebhook(webhookUrl: string) {
+export async function createWebhook(_webhookUrl: string) {
   // Fetch all creator wallets (or hardcode for demo)
   const creatorWallets = await db.meeting.findMany({
     select: { creatorWallet: true },

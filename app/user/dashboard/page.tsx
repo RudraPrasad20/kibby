@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { WalletConnectButton } from '@/components/walletConnectButton' // Assuming this is needed for initial connection if not already connected
 import Loading from '@/app/loading'
 import {
   Dialog,

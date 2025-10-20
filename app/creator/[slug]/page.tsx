@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import axios from "axios";
+import { CopyIcon } from "lucide-react";
 
 interface Booking {
   id: string;
@@ -150,6 +151,18 @@ export default function MeetingDetails() {
                     {booking.userWallet.slice(-6)}
                   </span>
                   <div className="flex items-center gap-3 text-sm">
+                  <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              onClick={() => {
+                navigator.clipboard.writeText(booking.userWallet);
+                toast.success("Wallet address copied!");
+              }}
+              aria-label="Copy wallet address"
+            >
+              <CopyIcon className="h-4 w-4 cursor-pointer" />
+            </Button>
                     <span className="text-muted-foreground">
                       {new Date(booking.bookedAt).toLocaleDateString("en-US", {
                         year: "numeric",
