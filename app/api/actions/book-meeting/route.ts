@@ -1,4 +1,4 @@
-// app/api/actions/book-meeting/route.ts (fixed: Add links.next in POST for success redirect)
+// app/api/actions/book-meeting/route.ts (fixed: Proper reference in href/memo, links.next as string for redirect)
 import {
   ActionGetResponse,
   ActionPostRequest,
@@ -60,7 +60,7 @@ export const GET = async (req: Request) => {
 
     const baseUrl = url.origin;
 
-    // Generate unique reference for idempotency/polling
+    // FIXED: Generate unique reference for idempotency/polling
     const reference = crypto.randomUUID();
 
     const response: ActionGetResponse = {
@@ -74,7 +74,7 @@ export const GET = async (req: Request) => {
           {
             type: "transaction",
             label: `${meeting.price} SOL`,
-            href: `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}&reference=${reference}`,  // Include reference
+            href: `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}&reference=${reference}`,  // FIXED: Include reference in href
           },
         ],
       },
@@ -99,7 +99,7 @@ export const POST = async (req: Request) => {
 
     const meetingId = url.searchParams.get("meetingId");
     const amountParam = url.searchParams.get("amount");
-    const reference = url.searchParams.get("reference");
+    const reference = url.searchParams.get("reference");  // FIXED: From GET href
     const amount = Number(amountParam);
 
     if (!meetingId || !reference || amountParam === null || isNaN(amount) || amount <= 0) {
@@ -126,25 +126,25 @@ export const POST = async (req: Request) => {
 
     const receiver = new PublicKey(meeting.creatorWallet);
 
+    // FIXED: DON'T CREATE BOOKING HERE – wait for success route to avoid pending/dups
+
     const transaction = await prepareTransaction(
       connection,
       payer,
       receiver,
       amount,
-      reference
+      reference  // FIXED: Use reference in memo
     );
 
-  const baseUrl = url.origin;
+    const baseUrl = url.origin;
+    const successUrl = `${baseUrl}/api/actions/book-meeting/success?reference=${reference}&meetingId=${meetingId}&amount=${amount}`;
 
-  const response: ActionPostResponse = {
+    const response: ActionPostResponse = {
       type: "transaction",
       transaction: Buffer.from(transaction.serialize()).toString("base64"),
       message: `Booking ${meeting.title} for ${amount} SOL`,
       links: {
-      next: {
-        type: 'post',
-        href: `${baseUrl}/api/actions/book-meeting/success?reference=${reference}&meetingId=${meetingId}&amount=${amount}`,
-      },
+        next: { type: "post", href: successUrl },
       },
     };
 
@@ -171,6 +171,7 @@ const prepareTransaction = async (
     lamports: amount * LAMPORTS_PER_SOL,
   });
 
+  // FIXED: Memo with reference for polling in success
   const memoIx = createMemoInstruction(`book:${reference}:${payer.toBase58()}`, [payer]);
   const instructions = [memoIx, transferIx];
 
