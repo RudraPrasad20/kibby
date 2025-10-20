@@ -1,102 +1,186 @@
-// app/api/actions/book-meeting/success/route.ts (NEW FILE: Handles tx confirmation, booking create, NFT mint)
-import { NextRequest, NextResponse } from 'next/server';
+// app/api/actions/book-meeting/route.ts (fixed: Add links.next in POST for success redirect)
+import {
+  ActionGetResponse,
+  ActionPostRequest,
+  ActionPostResponse,
+  ACTIONS_CORS_HEADERS,
+  BLOCKCHAIN_IDS,
+} from "@solana/actions";
+
+import {
+  Connection,
+  PublicKey,
+  LAMPORTS_PER_SOL,
+  SystemProgram,
+  TransactionMessage,
+  VersionedTransaction,
+} from "@solana/web3.js";
+
+import { createMemoInstruction } from "@solana/spl-memo";
+import crypto from 'crypto';  // For reference generation
+
 import { db } from '@/lib/db';
-import { Connection, PublicKey } from '@solana/web3.js';
-import { LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { mintBookingNft } from '@/lib/nft';  // Import mint func
 
-const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL || 'https://api.devnet.solana.com');
+const blockchain = BLOCKCHAIN_IDS.devnet;
+const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL!);
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const reference = searchParams.get('reference');
-  const meetingId = searchParams.get('meetingId');
-  const expectedAmount = parseFloat(searchParams.get('amount') || '0');
+const headers = {
+  ...ACTIONS_CORS_HEADERS,
+  "x-blockchain-ids": blockchain,
+  "x-action-version": "2.4",
+};
 
-  if (!reference || !meetingId || expectedAmount <= 0) {
-    return NextResponse.json({ error: 'Missing reference, meeting, or amount' }, { status: 400 });
+export const OPTIONS = async () => {
+  return new Response(null, { headers });
+};
+
+export const GET = async (req: Request) => {
+  const url = new URL(req.url);
+  const meetingId = url.searchParams.get("meetingId");
+
+  if (!meetingId) {
+    return new Response(JSON.stringify({ error: "Meeting ID required" }), {
+      status: 400,
+      headers,
+    });
   }
 
   try {
-    const meeting = await db.meeting.findUnique({ where: { id: meetingId } });
+    const meeting = await db.meeting.findUnique({
+      where: { id: meetingId },
+      select: { title: true, price: true, creatorWallet: true }
+    });
+
     if (!meeting) {
-      return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
-    }
-
-    // Poll for tx with memo containing reference (up to 30s, limit 5 recent)
-    const signatures = await connection.getSignaturesForAddress(
-      new PublicKey(meeting.creatorWallet),  // Poll creator's account for incoming txs
-      { limit: 5 }
-    );
-
-    let confirmedSig: string | null = null;
-    let userWallet: string | null = null;
-
-    for (const sigInfo of signatures) {
-      const tx = await connection.getTransaction(sigInfo.signature, {
-        commitment: 'confirmed',
-        maxSupportedTransactionVersion: 0,
+      return new Response(JSON.stringify({ error: "Meeting not found" }), {
+        status: 404,
+        headers,
       });
-
-      if (!tx) continue;
-
-      // Verify memo includes reference, amount matches
-      const memos = tx.meta?.logMessages?.filter(log => log.startsWith('book:')) || [];
-      if (memos.some(memo => memo.includes(reference)) &&
-          (tx.meta?.preBalances?.[tx.meta.preBalances.length - 1] || 0) - (tx.meta?.postBalances?.[tx.meta.postBalances.length - 1] || 0) / LAMPORTS_PER_SOL === expectedAmount) {
-        confirmedSig = sigInfo.signature;
-        userWallet = tx.transaction.message.staticAccountKeys[0].toBase58();  // Fee payer = user
-        break;
-      }
     }
 
-    if (!confirmedSig || !userWallet) {
-      return NextResponse.json({ error: 'Payment not confirmed yet. Retrying...' }, { status: 202 });
-    }
+    const baseUrl = url.origin;
 
-    // Idempotency: Check if txSig already processed
-    const existing = await db.booking.findUnique({
-      where: { transactionSig: confirmedSig },
-    });
+    // Generate unique reference for idempotency/polling
+    const reference = crypto.randomUUID();
 
-    if (existing) {
-      return NextResponse.json({ success: true, bookingId: existing.id, message: 'Already confirmed' });
-    }
-
-    // Create single confirmed booking
-    const booking = await db.booking.create({
-      data: {
-        meetingId,
-        userWallet,
-        status: 'confirmed',
-        transactionSig: confirmedSig,
-        bookedAt: new Date(),
+    const response: ActionGetResponse = {
+      type: "action",
+      icon: `${baseUrl}/next.svg`,
+      label: "Trusted by Kibby",
+      title: `Book ${meeting.title}`,
+      description: `Pay ${meeting.price} SOL to book a ${meeting.title} meeting.`,
+      links: {
+        actions: [
+          {
+            type: "transaction",
+            label: `${meeting.price} SOL`,
+            href: `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}&reference=${reference}`,  // Include reference
+          },
+        ],
       },
-    });
+    };
 
-    // Mint NFT
-    let nftMint: string | null = null;
-    try {
-      nftMint = await mintBookingNft(meeting, userWallet);
-      await db.booking.update({
-        where: { id: booking.id },
-        data: { nftMint },
-      });
-      console.log(`✅ NFT minted for booking ${booking.id}: ${nftMint}`);
-    } catch (mintError) {
-      console.error('❌ NFT mint failed:', mintError);
-      // Booking succeeds anyway
-    }
-
-    return NextResponse.json({ 
-      success: true, 
-      bookingId: booking.id, 
-      userWallet,
-      nftMint,
-      message: 'Booking confirmed! Check your wallet for NFT ticket.' 
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers,
     });
   } catch (error) {
-    console.error('Confirmation error:', error);
-    return NextResponse.json({ error: 'Confirmation failed' }, { status: 500 });
+    console.error("Error fetching meeting:", error);
+    return new Response(JSON.stringify({ error: "Failed to load meeting" }), {
+      status: 500,
+      headers,
+    });
   }
-}
+};
+
+export const POST = async (req: Request) => {
+  try {
+    const url = new URL(req.url);
+
+    const meetingId = url.searchParams.get("meetingId");
+    const amountParam = url.searchParams.get("amount");
+    const reference = url.searchParams.get("reference");
+    const amount = Number(amountParam);
+
+    if (!meetingId || !reference || amountParam === null || isNaN(amount) || amount <= 0) {
+      return new Response(JSON.stringify({ error: "Invalid meeting ID, reference, or amount" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    const meeting = await db.meeting.findUnique({
+      where: { id: meetingId },
+      select: { creatorWallet: true, price: true, title: true }
+    });
+
+    if (!meeting || amount < meeting.price) {
+      return new Response(JSON.stringify({ error: "Meeting not found or insufficient amount" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    const request: ActionPostRequest = await req.json();
+    const payer = new PublicKey(request.account);  // User's wallet
+
+    const receiver = new PublicKey(meeting.creatorWallet);
+
+    const transaction = await prepareTransaction(
+      connection,
+      payer,
+      receiver,
+      amount,
+      reference
+    );
+
+  const baseUrl = url.origin;
+
+  const response: ActionPostResponse = {
+      type: "transaction",
+      transaction: Buffer.from(transaction.serialize()).toString("base64"),
+      message: `Booking ${meeting.title} for ${amount} SOL`,
+      links: {
+      next: {
+        type: 'post',
+        href: `${baseUrl}/api/actions/book-meeting/success?reference=${reference}&meetingId=${meetingId}&amount=${amount}`,
+      },
+      },
+    };
+
+    return Response.json(response, { status: 200, headers });
+  } catch (error) {
+    console.error("Error processing request:", error);
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
+      status: 500,
+      headers,
+    });
+  }
+};
+
+const prepareTransaction = async (
+  connection: Connection,
+  payer: PublicKey,
+  receiver: PublicKey,
+  amount: number,
+  reference: string
+) => {
+  const transferIx = SystemProgram.transfer({
+    fromPubkey: payer,
+    toPubkey: receiver,
+    lamports: amount * LAMPORTS_PER_SOL,
+  });
+
+  const memoIx = createMemoInstruction(`book:${reference}:${payer.toBase58()}`, [payer]);
+  const instructions = [memoIx, transferIx];
+
+  const { blockhash } = await connection.getLatestBlockhash();
+
+  const message = new TransactionMessage({
+    payerKey: payer,
+    recentBlockhash: blockhash,
+    instructions,
+  }).compileToV0Message();
+
+  return new VersionedTransaction(message);
+};

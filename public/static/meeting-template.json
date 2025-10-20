@@ -1,7 +1,7 @@
 {
     "name": "Meeting Ticket",
     "description": "Your booking pass",
-    "image": "/static/placeholder-ticket.png",
+    "image": "/static/ticket.png",
     "attributes": [
       { "trait_type": "Type", "value": "Access Pass" }
     ]

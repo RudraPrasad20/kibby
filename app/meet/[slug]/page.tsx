@@ -5,12 +5,13 @@ import { useWallet } from '@solana/wallet-adapter-react'
 import { useParams, useRouter } from 'next/navigation'
 import { Connection, PublicKey, LAMPORTS_PER_SOL, Transaction, SystemProgram } from '@solana/web3.js'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card' // Added CardDescription, CardFooter
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { WalletConnectButton } from '@/components/walletConnectButton'
 import Loading from '@/app/loading'
 import axios from 'axios'
-import { Loader2 } from 'lucide-react' // For loading spinner on button
+import { Loader2 } from 'lucide-react'
+import { mintBookingNft } from '@/lib/nft'
 
 interface Meeting {
   id: string
@@ -27,10 +28,12 @@ export default function BookMeeting() {
   const params = useParams()
   const slug = params.slug as string
   const router = useRouter()
-  const { publicKey, sendTransaction, connected } = useWallet() // Added 'connected'
+  const { publicKey, sendTransaction, connected, wallet } = useWallet()
   const [meeting, setMeeting] = useState<Meeting | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isBooking, setIsBooking] = useState(false) // Renamed for clarity
+  const [isBooking, setIsBooking] = useState(false)
+
+  const mintFee = 0.001;  // NEW: Fixed mint fee (adjust for mainnet)
 
   const userHasBooked = useMemo(() => {
     if (!publicKey || !meeting) return false
@@ -67,37 +70,44 @@ export default function BookMeeting() {
     try {
       const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL!)
 
+      // NEW: Add mint fee to total
+      const totalAmount = meeting.price + mintFee;
       const tx = new Transaction().add(
         SystemProgram.transfer({
           fromPubkey: publicKey,
           toPubkey: new PublicKey(meeting.creatorWallet),
-          lamports: Math.floor(meeting.price * LAMPORTS_PER_SOL),
+          lamports: Math.floor(totalAmount * LAMPORTS_PER_SOL),
         })
       )
 
       const signature = await sendTransaction(tx, connection)
-      await connection.confirmTransaction(signature, 'confirmed') // Use 'confirmed' for better reliability
+      await connection.confirmTransaction(signature, 'confirmed')
 
+      // Create booking via API
       await axios.post('/api/bookings', {
         meetingId: meeting.id,
         userWallet: publicKey.toBase58(),
         transactionSig: signature,
       })
 
-      toast.success('Meeting booked successfully!')
+      // NEW: Mint NFT client-side (user signs, pays fee from above)
+      let nftMint: string | null = null;
+      try {
+        nftMint = await mintBookingNft(meeting, publicKey.toBase58(), wallet?.adapter);
+        toast.success(`Booked + NFT minted! Mint: ${nftMint}`);
+      } catch (mintError) {
+        console.error('NFT mint failed:', mintError);
+        toast.error('Booked, but NFT mint failed—retry or check wallet.');
+      }
+
       router.push('/user/dashboard')
     } catch (error) {
       console.error('Payment or booking failed:', error)
-      if (error) {
-        toast.error("Transaction cancelled by user.");
-      } else {
-        toast.error('Payment or booking failed. Please try again.');
-      }
+      toast.error(error ? "Transaction cancelled." : 'Payment failed. Try again.');
     } finally {
       setIsBooking(false)
     }
   }
-
   // Loading State
   if (loading) {
     return (
