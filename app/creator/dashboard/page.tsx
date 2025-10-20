@@ -136,7 +136,7 @@ export default function CreatorDashboard() {
                         </DialogHeader>
                         <div className="flex items-center space-x-2">
                           <div className="grid flex-1 gap-2">
-                            <Label htmlFor="meeting-link" className="sr-only">
+                            <Label htmlFor="meeting-link">
                               Meeting Link
                             </Label>
                             <Input
@@ -152,7 +152,7 @@ export default function CreatorDashboard() {
                         </div>
                         <div className="flex items-center space-x-2">
                           <div className="grid flex-1 gap-2">
-                            <Label htmlFor="blink-link" className="sr-only">
+                            <Label htmlFor="blink-link">
                               Blink URL
                             </Label>
                             <Input

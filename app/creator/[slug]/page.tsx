@@ -99,7 +99,6 @@ export default function MeetingDetails() {
           </CardContent>
         </Card>
 
-        {/* Blink Share Card */}
         {blinkUrl && (
           <Card className="md:col-span-1 flex flex-col justify-between">
             <CardHeader>
