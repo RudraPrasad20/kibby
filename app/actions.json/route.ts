@@ -2,6 +2,11 @@
 
 import { ACTIONS_CORS_HEADERS, ActionsJson } from "@solana/actions";
 
+const headers = {
+  ...ACTIONS_CORS_HEADERS,
+  "Content-Type": "application/json",
+};
+
 export const GET = async () => {
   const payload: ActionsJson = {
     rules: [
@@ -18,11 +23,14 @@ export const GET = async () => {
     ],
   };
 
-  return Response.json(payload, {
-    headers: ACTIONS_CORS_HEADERS,
+  return new Response(JSON.stringify(payload), {
+    status: 200,
+    headers,
   });
 };
 
 // DO NOT FORGET TO INCLUDE THE `OPTIONS` HTTP METHOD
 // THIS WILL ENSURE CORS WORKS FOR BLINKS
-export const OPTIONS = GET;
+export const OPTIONS = async () => {
+  return new Response(null, { headers });
+};
