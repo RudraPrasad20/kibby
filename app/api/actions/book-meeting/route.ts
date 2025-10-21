@@ -5,6 +5,7 @@ import {
   ACTIONS_CORS_HEADERS,
   BLOCKCHAIN_IDS,
 } from "@solana/actions";
+
 import {
   Connection,
   PublicKey,
@@ -13,32 +14,42 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
+
 import { createMemoInstruction } from "@solana/spl-memo";
-import { db } from "@/lib/db";
+
+import { db } from '@/lib/db';
+
 const blockchain = BLOCKCHAIN_IDS.devnet;
+
 const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL!);
+
 const headers = {
   ...ACTIONS_CORS_HEADERS,
   "x-blockchain-ids": blockchain,
   "x-action-version": "2.4",
 };
+
 export const OPTIONS = async () => {
   return new Response(null, { headers });
 };
+
 export const GET = async (req: Request) => {
   const url = new URL(req.url);
   const meetingId = url.searchParams.get("meetingId");
+
   if (!meetingId) {
     return new Response(JSON.stringify({ error: "Meeting ID required" }), {
       status: 400,
       headers,
     });
   }
+
   try {
     const meeting = await db.meeting.findUnique({
       where: { id: meetingId },
-      select: { title: true, price: true, creatorWallet: true }, // Add iconUrl
+      select: { title: true, price: true, creatorWallet: true }  // Add iconUrl
     });
+
     if (!meeting) {
       return new Response(JSON.stringify({ error: "Meeting not found" }), {
         status: 404,
@@ -46,7 +57,7 @@ export const GET = async (req: Request) => {
       });
     }
 
-    const baseUrl = url.origin; // https://kibby.vercel.app
+    const baseUrl = url.origin;  // https://kibby.vercel.app
 
     const response: ActionGetResponse = {
       type: "action",
@@ -59,7 +70,7 @@ export const GET = async (req: Request) => {
           {
             type: "transaction",
             label: `${meeting.price} SOL`,
-            href: `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}`, // Absolute
+            href: `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}`,  // Absolute
           },
         ],
       },
@@ -77,36 +88,32 @@ export const GET = async (req: Request) => {
     });
   }
 };
+
 export const POST = async (req: Request) => {
   try {
     const url = new URL(req.url);
+
     const meetingId = url.searchParams.get("meetingId");
     const amountParam = url.searchParams.get("amount");
     const amount = Number(amountParam);
 
     if (!meetingId || amountParam === null || isNaN(amount) || amount <= 0) {
-      return new Response(
-        JSON.stringify({ error: "Invalid meeting ID or amount" }),
-        {
-          status: 400,
-          headers,
-        }
-      );
+      return new Response(JSON.stringify({ error: "Invalid meeting ID or amount" }), {
+        status: 400,
+        headers,
+      });
     }
 
     const meeting = await db.meeting.findUnique({
       where: { id: meetingId },
-      select: { creatorWallet: true, price: true, title: true },
+      select: { creatorWallet: true, price: true, title: true }
     });
 
     if (!meeting || amount < meeting.price) {
-      return new Response(
-        JSON.stringify({ error: "Meeting not found or insufficient amount" }),
-        {
-          status: 400,
-          headers,
-        }
-      );
+      return new Response(JSON.stringify({ error: "Meeting not found or insufficient amount" }), {
+        status: 400,
+        headers,
+      });
     }
 
     const request: ActionPostRequest = await req.json();
@@ -119,7 +126,7 @@ export const POST = async (req: Request) => {
         meetingId,
         userWallet: payer.toBase58(),
         status: "pending",
-        transactionSig: "blink-pending",
+        transactionSig: "blink-pending", 
       },
     });
 
@@ -128,7 +135,7 @@ export const POST = async (req: Request) => {
       payer,
       receiver,
       amount,
-      pendingBooking.id
+      pendingBooking.id 
     );
 
     const response: ActionPostResponse = {
@@ -146,28 +153,33 @@ export const POST = async (req: Request) => {
     });
   }
 };
+
 const prepareTransaction = async (
   connection: Connection,
   payer: PublicKey,
   receiver: PublicKey,
   amount: number,
-  bookingId?: string
+  bookingId?: string 
 ) => {
   const transferIx = SystemProgram.transfer({
     fromPubkey: payer,
     toPubkey: receiver,
     lamports: amount * LAMPORTS_PER_SOL,
   });
+
   let instructions = [transferIx];
   if (bookingId) {
     const memoIx = createMemoInstruction(bookingId, [payer]);
     instructions = [memoIx, transferIx];
   }
+
   const { blockhash } = await connection.getLatestBlockhash();
+
   const message = new TransactionMessage({
     payerKey: payer,
     recentBlockhash: blockhash,
     instructions,
   }).compileToV0Message();
+
   return new VersionedTransaction(message);
 };
