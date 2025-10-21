@@ -1,4 +1,3 @@
-// app/api/actions/book-meeting/route.ts (adapted from donate-sol: Dynamic receiver, pending booking, fixed validation/signing)
 import {
   ActionGetResponse,
   ActionPostRequest,
@@ -16,13 +15,12 @@ import {
   VersionedTransaction,
 } from "@solana/web3.js";
 
-import { createMemoInstruction } from "@solana/spl-memo";
-
+// Import your Prisma client
 import { db } from '@/lib/db';
 
 const blockchain = BLOCKCHAIN_IDS.devnet;
 
-const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL || "https://api.devnet.solana.com");
+const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL || "https://api.devnet.solana.com", "confirmed"); // Set a default commitment level
 
 const headers = {
   ...ACTIONS_CORS_HEADERS,
@@ -58,11 +56,11 @@ export const GET = async (req: Request) => {
       });
     }
 
-    const baseUrl = new URL("/", req.url).toString();  // Absolute base
+    const baseUrl = new URL("/", req.url).toString();
 
     const response: ActionGetResponse = {
       type: "action",
-      icon: `${baseUrl}/next.svg`,  // Absolute path
+      icon: `${baseUrl}/next.svg`, // Ensure this path is correct for your project
       label: `${meeting.price} SOL`,
       title: `Book ${meeting.title}`,
       description: `Pay ${meeting.price} SOL to book a ${meeting.title} meeting.`,
@@ -71,7 +69,7 @@ export const GET = async (req: Request) => {
           {
             type: "transaction",
             label: `${meeting.price} SOL`,
-            href: `/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}`,  // Relative href (Actions spec allows)
+            href: `/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}`,
           },
         ],
       },
@@ -90,10 +88,13 @@ export const GET = async (req: Request) => {
   }
 };
 
+// app/api/actions/book-meeting/route.ts (only showing changes in POST)
+
+// ... (imports and other GET/OPTIONS code remain the same) ...
+
 export const POST = async (req: Request) => {
   try {
     const url = new URL(req.url);
-
     const meetingId = url.searchParams.get("meetingId");
     const amountParam = url.searchParams.get("amount");
     const amount = Number(amountParam);
@@ -122,13 +123,13 @@ export const POST = async (req: Request) => {
 
     const receiver = new PublicKey(meeting.creatorWallet);
 
-    // Create pending booking for immediate dashboard visibility
+    // Create pending booking
     const pendingBooking = await db.booking.create({
       data: {
         meetingId,
         userWallet: payer.toBase58(),
         status: "pending",
-        transactionSig: "blink-pending", 
+        transactionSig: "pending-blink-tx", // This will be updated by the webhook
       },
     });
 
@@ -138,14 +139,14 @@ export const POST = async (req: Request) => {
       connection,
       payer,
       receiver,
-      amount,
-      pendingBooking.id 
+      amount
     );
 
     const response: ActionPostResponse = {
       type: "transaction",
       transaction: Buffer.from(transaction.serialize()).toString("base64"),
-      message: `Booking ${meeting.title} for ${amount} SOL`,
+      // Add booking ID to message for user feedback and potential debugging
+      message: `Booking ${meeting.title} for ${amount} SOL (Booking ID: ${pendingBooking.id}).`,
     };
 
     return Response.json(response, { status: 200, headers });
@@ -158,31 +159,29 @@ export const POST = async (req: Request) => {
   }
 };
 
+// ... (prepareTransaction function remains the same) ...
+
 const prepareTransaction = async (
   connection: Connection,
   payer: PublicKey,
   receiver: PublicKey,
-  amount: number,
-  bookingId?: string 
+  amount: number
 ) => {
+  // Create a transfer instruction
   const transferIx = SystemProgram.transfer({
     fromPubkey: payer,
     toPubkey: receiver,
     lamports: amount * LAMPORTS_PER_SOL,
   });
 
-  let instructions = [transferIx];
-  if (bookingId) {
-    const memoIx = createMemoInstruction(bookingId, [payer]);
-    instructions = [memoIx, transferIx];
-  }
+  // Get the latest blockhash with 'finalized' commitment for better reliability
+  const { blockhash } = await connection.getLatestBlockhash("finalized");
 
-  const { blockhash } = await connection.getLatestBlockhash("finalized");  // FIXED: 'finalized' for reliable signing
-
+  // Create a transaction message
   const message = new TransactionMessage({
     payerKey: payer,
     recentBlockhash: blockhash,
-    instructions,
+    instructions: [transferIx], // Only transfer instruction for simplicity and to avoid payer sig issues with memo
   }).compileToV0Message();
 
   return new VersionedTransaction(message);
