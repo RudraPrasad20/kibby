@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { toast } from 'sonner' // Ensure sonner is imported for toasts
+import { toast } from 'sonner'
 import { CopyIcon } from 'lucide-react'
 import axios from 'axios'
 
@@ -40,11 +40,45 @@ export default function UserDashboard() {
   const { publicKey } = useWallet()
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)  // NEW: For refresh button
 
   const handleCopyLink = (text: string, message: string) => {
     navigator.clipboard.writeText(text)
     toast.success(message)
   }
+
+  // NEW: Refresh function for testing after Blink pay
+  const refreshBookings = async () => {
+    setRefreshing(true);
+    try {
+      if (!publicKey) {
+        toast.error('Please connect your wallet');
+        setRefreshing(false);
+        return;
+      }
+      const res = await axios.get(`/api/bookings`, {
+        params: { wallet: publicKey.toBase58() },
+      });
+      setBookings(res.data);
+      toast.success('Bookings refreshed!');
+    } catch (error) {
+      console.log(error)
+      toast.error('Refresh failed');
+    }
+    setRefreshing(false);
+  };
+
+  // NEW: Confirm pending booking
+  const confirmBooking = async (bookingId: string) => {
+    try {
+      await axios.post('/api/bookings/confirm', { bookingId });
+      toast.success('Booking confirmed!');
+      refreshBookings();  // Refresh to update
+    } catch (error) {
+      console.log(error)
+      toast.error('Confirm failed');
+    }
+  };
 
   useEffect(() => {
     if (!publicKey) {
@@ -82,6 +116,11 @@ export default function UserDashboard() {
     <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">My Bookings</h1>
+        <div className="flex gap-2">
+          <Button onClick={refreshBookings} disabled={refreshing} variant="outline">
+            {refreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -91,7 +130,7 @@ export default function UserDashboard() {
               <CardHeader className="border-b pb-4">
                 <CardTitle className="flex items-center justify-between text-xl font-semibold text-gray-800 dark:text-gray-200">
                   <span>{booking.meeting.title}</span>
-                  <Badge className={`px-3 py-1 text-sm font-medium ${booking.status === 'Completed' ? 'bg-green-500 hover:bg-green-600' : booking.status === 'Pending' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-gray-500 hover:bg-gray-600'}`}>
+                  <Badge className={`px-3 py-1 text-sm font-medium ${booking.status === 'confirmed' ? 'bg-green-500 hover:bg-green-600' : booking.status === 'pending' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-gray-500 hover:bg-gray-600'}`}>
                     {booking.status}
                   </Badge>
                 </CardTitle>
@@ -111,6 +150,9 @@ export default function UserDashboard() {
                   <Link href={`/meet/${booking.meeting.slug}`} className="w-full">
                     <Button variant="outline" className="w-full cursor-pointer">View Meeting Details</Button>
                   </Link>
+                )}
+                {booking.status === 'pending' && (
+                  <Button onClick={() => confirmBooking(booking.id)} className="w-full">Confirm Payment</Button>
                 )}
                 {booking.transactionSig ? (
                   <Dialog>
@@ -157,8 +199,7 @@ export default function UserDashboard() {
           ))
         ) : (
           <div className="col-span-full flex flex-col items-center justify-center py-16 bg-gray-50 dark:bg-gray-800 rounded-lg shadow-inner">
-            <p className="text-xl font-semibold text-gray-600 dark:text-gray-300 mb-4">You haven not booked any meetings yet.</p>
-            {/* You could add a link here to browse available meetings if applicable */}
+            <p className="text-xl font-semibold text-gray-600 dark:text-gray-300 mb-4">You haven&apos;t booked any meetings yet.</p>
             <p className="mt-8 text-gray-500 dark:text-gray-400 text-sm">
               Discover and book new meetings to get started!
             </p>

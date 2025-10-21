@@ -43,13 +43,14 @@ interface Meeting {
   price: number
   iconUrl?: string
   createdAt: string
-  bookings: { id: string }[]
+  bookings: { id: string; userWallet: string; status: string }[]  // Include status for badges
 }
 
 export default function CreatorDashboard() {
   const { publicKey } = useWallet()
   const [meetings, setMeetings] = useState<Meeting[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)  // NEW: For refresh button
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
 
   const handleDelete = async (meetingId: string) => {
@@ -70,9 +71,39 @@ export default function CreatorDashboard() {
     toast.success('Link copied to clipboard!')
   }
 
+  // NEW: Refresh function for testing after Blink pay
+  const refreshMeetings = async () => {
+    setRefreshing(true);
+    try {
+      if (!publicKey) {
+        toast.error('Please connect your wallet');
+        setRefreshing(false);
+        return;
+      }
+      const res = await axios.get(`/api/meetings?wallet=${publicKey.toBase58()}&type=creator`);
+      setMeetings(res.data);
+      toast.success('Dashboard refreshed!');
+    } catch (error) {
+      console.log(error)
+      toast.error('Refresh failed');
+    }
+    setRefreshing(false);
+  };
+
+  // NEW: Confirm pending booking
+  const confirmBooking = async (bookingId: string) => {
+    try {
+      await axios.post('/api/bookings/confirm', { bookingId });
+      toast.success('Booking confirmed!');
+      refreshMeetings();  // Refresh to update
+    } catch (error) {
+      console.log(error)
+      toast.error('Confirm failed');
+    }
+  };
+
   useEffect(() => {
     if (!publicKey) return
-
 
     axios.get(`/api/meetings?wallet=${publicKey.toBase58()}&type=creator`)
       .then(res => res.data)
@@ -87,9 +118,14 @@ export default function CreatorDashboard() {
     <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <h1 className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">Your Meetings</h1>
-        <Link href="/creator/create">
-          <Button className="w-full sm:w-auto cursor-pointer">Create New Meeting</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Button onClick={refreshMeetings} disabled={refreshing} variant="outline">
+            {refreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
+          <Link href="/creator/create">
+            <Button className="w-full sm:w-auto cursor-pointer">Create New Meeting</Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -195,13 +231,30 @@ export default function CreatorDashboard() {
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDelete(meeting.slug)}>
+                        <AlertDialogAction onClick={() => handleDelete(meeting.id)}>
                           Continue
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
                 </CardFooter>
+                {/* NEW: Show bookings list with status */}
+                {meeting.bookings.length > 0 && (
+                  <div className="border-t pt-4">
+                    <h3 className="font-semibold mb-2">Bookings</h3>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {meeting.bookings.map((booking) => (
+                        <div key={booking.id} className="flex justify-between items-center p-2 border rounded text-sm">
+                          <span>{booking.userWallet.slice(0, 4)}...{booking.userWallet.slice(-4)}</span>
+                          <Badge variant={booking.status === 'confirmed' ? 'default' : 'secondary'}>{booking.status}</Badge>
+                          {booking.status === 'pending' && (
+                            <Button size="sm" onClick={() => confirmBooking(booking.id)} className="ml-2">Confirm</Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </Card>
             )
           })

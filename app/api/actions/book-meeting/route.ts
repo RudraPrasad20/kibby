@@ -6,7 +6,7 @@ import {
   ACTIONS_CORS_HEADERS,
   BLOCKCHAIN_IDS,
 } from "@solana/actions";
-
+import crypto from 'crypto';  // Add for UUID
 import {
   Connection,
   PublicKey,
@@ -60,7 +60,7 @@ export const GET = async (req: Request) => {
 
     const response: ActionGetResponse = {
       type: "action",
-      icon: `${baseUrl}next.svg`,  // Absolute
+      icon: `${baseUrl}/next.svg`,  // Absolute
       label: `${meeting.price} SOL`,
       title: `Book ${meeting.title}`,
       description: `Pay ${meeting.price} SOL to book a ${meeting.title} meeting.`,
@@ -120,21 +120,17 @@ export const POST = async (req: Request) => {
 
     const receiver = new PublicKey(meeting.creatorWallet);
 
-    // Create pending booking for dashboard visibility (wrapped to not block tx)
-    let pendingBooking = null;
-    try {
-      pendingBooking = await db.booking.create({
-        data: {
-          meetingId,
-          userWallet: payer.toBase58(),
-          status: "pending",
-          transactionSig: "blink-pending",
-        },
-      });
-      console.log(`Pending booking created: ${pendingBooking.id}`);
-    } catch (dbError) {
-      console.error("DB error:", dbError);  // Tx still works
-    }
+    const pendingTxSig = crypto.randomUUID();  // FIXED: Unique per pay
+const pendingBooking = await db.booking.create({
+  data: {
+    meetingId,
+    userWallet: payer.toBase58(),
+    status: "pending",
+    transactionSig: pendingTxSig,  // FIXED: Unique
+  },
+});
+
+console.log(`Pending booking created for Blink: ${pendingBooking.id}, txSig: ${pendingTxSig}`);  //
 
     const transaction = await prepareTransaction(
       connection,
