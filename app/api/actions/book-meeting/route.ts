@@ -1,4 +1,3 @@
-// app/api/actions/book-meeting/route.ts (reverted to original without NFT – pending booking for dashboard visibility)
 import {
   ActionGetResponse,
   ActionPostRequest,
@@ -48,7 +47,7 @@ export const GET = async (req: Request) => {
   try {
     const meeting = await db.meeting.findUnique({
       where: { id: meetingId },
-      select: { title: true, price: true, creatorWallet: true }
+      select: { title: true, price: true, creatorWallet: true }  // Add iconUrl
     });
 
     if (!meeting) {
@@ -122,7 +121,6 @@ export const POST = async (req: Request) => {
 
     const receiver = new PublicKey(meeting.creatorWallet);
 
-    // FIXED: Create pending booking for immediate dashboard visibility (shows in user/creator dashboards right away)
     const pendingBooking = await db.booking.create({
       data: {
         meetingId,
@@ -131,8 +129,6 @@ export const POST = async (req: Request) => {
         transactionSig: "blink-pending", 
       },
     });
-
-    console.log(`Pending booking created: ${pendingBooking.id} for user ${payer.toBase58()}`);
 
     const transaction = await prepareTransaction(
       connection,
