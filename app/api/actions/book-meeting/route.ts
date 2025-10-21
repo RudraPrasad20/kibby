@@ -1,4 +1,4 @@
-// app/api/actions/book-meeting/route.ts (adapted from donate-sol: Simple tx, finalized blockhash, no memo for signing, pending booking wrapped for dashboard)
+// app/api/actions/book-meeting/route.ts (fixed: Simple like donate-sol, no memo for signing, finalized blockhash, absolute URLs, pending booking wrapped)
 import {
   ActionGetResponse,
   ActionPostRequest,
@@ -56,11 +56,11 @@ export const GET = async (req: Request) => {
       });
     }
 
-    const baseUrl = new URL("/", req.url).toString();
+    const baseUrl = new URL("/", req.url).toString();  // Absolute HTTPS
 
     const response: ActionGetResponse = {
       type: "action",
-      icon: `${baseUrl}/next.svg`,
+      icon: `${baseUrl}next.svg`,  // Absolute
       label: `${meeting.price} SOL`,
       title: `Book ${meeting.title}`,
       description: `Pay ${meeting.price} SOL to book a ${meeting.title} meeting.`,
@@ -69,7 +69,7 @@ export const GET = async (req: Request) => {
           {
             type: "transaction",
             label: `${meeting.price} SOL`,
-            href: `/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}`,
+            href: `${baseUrl}api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}`,  // FIXED: Absolute href
           },
         ],
       },
@@ -120,17 +120,21 @@ export const POST = async (req: Request) => {
 
     const receiver = new PublicKey(meeting.creatorWallet);
 
-    // Create pending booking for immediate dashboard visibility
-    const pendingBooking = await db.booking.create({
-      data: {
-        meetingId,
-        userWallet: payer.toBase58(),
-        status: "pending",
-        transactionSig: "blink-pending", 
-      },
-    });
-
-    console.log(`Pending booking created for Blink: ${pendingBooking.id}`);
+    // Create pending booking for dashboard visibility (wrapped to not block tx)
+    let pendingBooking = null;
+    try {
+      pendingBooking = await db.booking.create({
+        data: {
+          meetingId,
+          userWallet: payer.toBase58(),
+          status: "pending",
+          transactionSig: "blink-pending",
+        },
+      });
+      console.log(`Pending booking created: ${pendingBooking.id}`);
+    } catch (dbError) {
+      console.error("DB error:", dbError);  // Tx still works
+    }
 
     const transaction = await prepareTransaction(
       connection,
