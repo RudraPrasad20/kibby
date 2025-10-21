@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import axios from 'axios'
 import { generateBlinkUrl } from '@/lib/utils'
-import { createWebhook } from '@/lib/helius'
+
 import Loading from '@/app/loading'
 import {
   Dialog,
@@ -73,7 +73,6 @@ export default function CreatorDashboard() {
   useEffect(() => {
     if (!publicKey) return
 
-    createWebhook(`${baseUrl}/api/webhooks`).catch(console.error)
 
     axios.get(`/api/meetings?wallet=${publicKey.toBase58()}&type=creator`)
       .then(res => res.data)
