@@ -1,4 +1,3 @@
-// app/api/actions/book-meeting/route.ts (fixed: Pending booking in POST for visibility, quick poll in POST for confirm + mint – no success redirect needed)
 import {
   ActionGetResponse,
   ActionPostRequest,
@@ -6,7 +5,6 @@ import {
   ACTIONS_CORS_HEADERS,
   BLOCKCHAIN_IDS,
 } from "@solana/actions";
-
 import {
   Connection,
   PublicKey,
@@ -15,42 +13,32 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
-
 import { createMemoInstruction } from "@solana/spl-memo";
-
-import { db } from '@/lib/db';
-import { mintBookingNft } from '@/lib/nft';  // NEW: Mint after confirm
-
+import { db } from "@/lib/db";
 const blockchain = BLOCKCHAIN_IDS.devnet;
 const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL!);
-
 const headers = {
   ...ACTIONS_CORS_HEADERS,
   "x-blockchain-ids": blockchain,
   "x-action-version": "2.4",
 };
-
 export const OPTIONS = async () => {
   return new Response(null, { headers });
 };
-
 export const GET = async (req: Request) => {
   const url = new URL(req.url);
   const meetingId = url.searchParams.get("meetingId");
-
   if (!meetingId) {
     return new Response(JSON.stringify({ error: "Meeting ID required" }), {
       status: 400,
       headers,
     });
   }
-
   try {
     const meeting = await db.meeting.findUnique({
       where: { id: meetingId },
-      select: { title: true, price: true, creatorWallet: true }
+      select: { title: true, price: true, creatorWallet: true }, // Add iconUrl
     });
-
     if (!meeting) {
       return new Response(JSON.stringify({ error: "Meeting not found" }), {
         status: 404,
@@ -58,7 +46,7 @@ export const GET = async (req: Request) => {
       });
     }
 
-    const baseUrl = url.origin;
+    const baseUrl = url.origin; // https://kibby.vercel.app
 
     const response: ActionGetResponse = {
       type: "action",
@@ -71,7 +59,7 @@ export const GET = async (req: Request) => {
           {
             type: "transaction",
             label: `${meeting.price} SOL`,
-            href: `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}`,
+            href: `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}`, // Absolute
           },
         ],
       },
@@ -89,32 +77,36 @@ export const GET = async (req: Request) => {
     });
   }
 };
-
 export const POST = async (req: Request) => {
   try {
     const url = new URL(req.url);
-
     const meetingId = url.searchParams.get("meetingId");
     const amountParam = url.searchParams.get("amount");
     const amount = Number(amountParam);
 
     if (!meetingId || amountParam === null || isNaN(amount) || amount <= 0) {
-      return new Response(JSON.stringify({ error: "Invalid meeting ID or amount" }), {
-        status: 400,
-        headers,
-      });
+      return new Response(
+        JSON.stringify({ error: "Invalid meeting ID or amount" }),
+        {
+          status: 400,
+          headers,
+        }
+      );
     }
 
     const meeting = await db.meeting.findUnique({
       where: { id: meetingId },
-      select: { creatorWallet: true, price: true, title: true, id: true, duration: true, description: true }
+      select: { creatorWallet: true, price: true, title: true },
     });
 
     if (!meeting || amount < meeting.price) {
-      return new Response(JSON.stringify({ error: "Meeting not found or insufficient amount" }), {
-        status: 400,
-        headers,
-      });
+      return new Response(
+        JSON.stringify({ error: "Meeting not found or insufficient amount" }),
+        {
+          status: 400,
+          headers,
+        }
+      );
     }
 
     const request: ActionPostRequest = await req.json();
@@ -122,69 +114,22 @@ export const POST = async (req: Request) => {
 
     const receiver = new PublicKey(meeting.creatorWallet);
 
-    // FIXED: Create pending booking for immediate dashboard visibility
     const pendingBooking = await db.booking.create({
       data: {
         meetingId,
         userWallet: payer.toBase58(),
         status: "pending",
-        transactionSig: "blink-pending", 
+        transactionSig: "blink-pending",
       },
     });
-
-    console.log(`Pending booking created: ${pendingBooking.id} for user ${payer.toBase58()}`);
 
     const transaction = await prepareTransaction(
       connection,
       payer,
       receiver,
       amount,
-      pendingBooking.id 
+      pendingBooking.id
     );
-
-    // FIXED: Quick poll for tx confirmation in POST (5s timeout) – confirm + mint immediately
-    console.log(`Polling for tx confirmation for booking ${pendingBooking.id}...`);
-
-    let confirmedSig: string | null = null;
-    const startTime = Date.now();
-    while (Date.now() - startTime < 5000) {  // 5s timeout
-      const signatures = await connection.getSignaturesForAddress(payer, { limit: 3 });  // Poll payer for recent txs
-      for (const sigInfo of signatures) {
-        if (sigInfo.confirmationStatus === 'confirmed') {
-          const tx = await connection.getTransaction(sigInfo.signature, { commitment: 'confirmed' });
-          if (tx && tx.meta && !tx.meta.err && tx.meta.logMessages?.some(log => log.includes(pendingBooking.id))) {
-            confirmedSig = sigInfo.signature;
-            console.log(`Tx confirmed! Sig: ${confirmedSig}`);
-            break;
-          }
-        }
-      }
-      if (confirmedSig) break;
-      await new Promise(resolve => setTimeout(resolve, 500));  // Poll every 0.5s
-    }
-
-    if (confirmedSig) {
-      // Update to confirmed
-      const booking = await db.booking.update({
-        where: { id: pendingBooking.id },
-        data: { status: 'confirmed', transactionSig: confirmedSig },
-      });
-
-      // FIXED: Mint NFT after confirmation
-      let nftMint: string | null = null;
-      try {
-        nftMint = await mintBookingNft(meeting, payer.toBase58());
-        await db.booking.update({
-          where: { id: booking.id },
-          data: { nftMint },
-        });
-        console.log(`✅ NFT minted for booking ${booking.id}: ${nftMint}`);
-      } catch (mintError) {
-        console.error('❌ NFT mint failed:', mintError);
-      }
-    } else {
-      console.log('Tx not confirmed in time – booking remains pending');
-    }
 
     const response: ActionPostResponse = {
       type: "transaction",
@@ -201,33 +146,29 @@ export const POST = async (req: Request) => {
     });
   }
 };
-
 const prepareTransaction = async (
   connection: Connection,
   payer: PublicKey,
   receiver: PublicKey,
   amount: number,
-  bookingId?: string 
+  bookingId?: string
 ) => {
   const transferIx = SystemProgram.transfer({
     fromPubkey: payer,
     toPubkey: receiver,
     lamports: amount * LAMPORTS_PER_SOL,
   });
-
   let instructions = [transferIx];
   if (bookingId) {
     const memoIx = createMemoInstruction(bookingId, [payer]);
     instructions = [memoIx, transferIx];
   }
-
   const { blockhash } = await connection.getLatestBlockhash();
-
   const message = new TransactionMessage({
     payerKey: payer,
     recentBlockhash: blockhash,
     instructions,
   }).compileToV0Message();
-
   return new VersionedTransaction(message);
 };
+
