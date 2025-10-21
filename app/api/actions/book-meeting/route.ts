@@ -1,4 +1,4 @@
-// app/api/actions/book-meeting/route.ts (fixed: Pending booking in POST for visibility, quick poll in POST for confirm + mint – no success redirect needed)
+// app/api/actions/book-meeting/route.ts (reverted to original without NFT – pending booking for dashboard visibility)
 import {
   ActionGetResponse,
   ActionPostRequest,
@@ -19,9 +19,9 @@ import {
 import { createMemoInstruction } from "@solana/spl-memo";
 
 import { db } from '@/lib/db';
-import { mintBookingNft } from '@/lib/nft';  // NEW: Mint after confirm
 
 const blockchain = BLOCKCHAIN_IDS.devnet;
+
 const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL!);
 
 const headers = {
@@ -58,7 +58,7 @@ export const GET = async (req: Request) => {
       });
     }
 
-    const baseUrl = url.origin;
+    const baseUrl = url.origin;  // https://kibby.vercel.app
 
     const response: ActionGetResponse = {
       type: "action",
@@ -71,7 +71,7 @@ export const GET = async (req: Request) => {
           {
             type: "transaction",
             label: `${meeting.price} SOL`,
-            href: `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}`,
+            href: `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}`,  // Absolute
           },
         ],
       },
@@ -107,7 +107,7 @@ export const POST = async (req: Request) => {
 
     const meeting = await db.meeting.findUnique({
       where: { id: meetingId },
-      select: { creatorWallet: true, price: true, title: true, id: true, duration: true, description: true }
+      select: { creatorWallet: true, price: true, title: true }
     });
 
     if (!meeting || amount < meeting.price) {
@@ -122,7 +122,7 @@ export const POST = async (req: Request) => {
 
     const receiver = new PublicKey(meeting.creatorWallet);
 
-    // FIXED: Create pending booking for immediate dashboard visibility
+    // FIXED: Create pending booking for immediate dashboard visibility (shows in user/creator dashboards right away)
     const pendingBooking = await db.booking.create({
       data: {
         meetingId,
@@ -141,50 +141,6 @@ export const POST = async (req: Request) => {
       amount,
       pendingBooking.id 
     );
-
-    // FIXED: Quick poll for tx confirmation in POST (5s timeout) – confirm + mint immediately
-    console.log(`Polling for tx confirmation for booking ${pendingBooking.id}...`);
-
-    let confirmedSig: string | null = null;
-    const startTime = Date.now();
-    while (Date.now() - startTime < 5000) {  // 5s timeout
-      const signatures = await connection.getSignaturesForAddress(payer, { limit: 3 });  // Poll payer for recent txs
-      for (const sigInfo of signatures) {
-        if (sigInfo.confirmationStatus === 'confirmed') {
-          const tx = await connection.getTransaction(sigInfo.signature, { commitment: 'confirmed' });
-          if (tx && tx.meta && !tx.meta.err && tx.meta.logMessages?.some(log => log.includes(pendingBooking.id))) {
-            confirmedSig = sigInfo.signature;
-            console.log(`Tx confirmed! Sig: ${confirmedSig}`);
-            break;
-          }
-        }
-      }
-      if (confirmedSig) break;
-      await new Promise(resolve => setTimeout(resolve, 500));  // Poll every 0.5s
-    }
-
-    if (confirmedSig) {
-      // Update to confirmed
-      const booking = await db.booking.update({
-        where: { id: pendingBooking.id },
-        data: { status: 'confirmed', transactionSig: confirmedSig },
-      });
-
-      // FIXED: Mint NFT after confirmation
-      let nftMint: string | null = null;
-      try {
-        nftMint = await mintBookingNft(meeting, payer.toBase58());
-        await db.booking.update({
-          where: { id: booking.id },
-          data: { nftMint },
-        });
-        console.log(`✅ NFT minted for booking ${booking.id}: ${nftMint}`);
-      } catch (mintError) {
-        console.error('❌ NFT mint failed:', mintError);
-      }
-    } else {
-      console.log('Tx not confirmed in time – booking remains pending');
-    }
 
     const response: ActionPostResponse = {
       type: "transaction",
