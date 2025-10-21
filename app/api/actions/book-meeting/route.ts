@@ -1,3 +1,4 @@
+// app/api/actions/book-meeting/route.ts (reverted to original without NFT – pending booking for dashboard visibility)
 import {
   ActionGetResponse,
   ActionPostRequest,
@@ -19,15 +20,14 @@ import { createMemoInstruction } from "@solana/spl-memo";
 
 import { db } from '@/lib/db';
 
-const blockchain = BLOCKCHAIN_IDS.mainnet;
+const blockchain = BLOCKCHAIN_IDS.devnet;
 
-const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL || 'https://api.mainnet-beta.solana.com');
+const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL!);
 
 const headers = {
   ...ACTIONS_CORS_HEADERS,
   "x-blockchain-ids": blockchain,
   "x-action-version": "2.4",
-  "Content-Type": "application/json",
 };
 
 export const OPTIONS = async () => {
@@ -48,7 +48,7 @@ export const GET = async (req: Request) => {
   try {
     const meeting = await db.meeting.findUnique({
       where: { id: meetingId },
-      select: { title: true, price: true, creatorWallet: true, description: true }
+      select: { title: true, price: true, creatorWallet: true }
     });
 
     if (!meeting) {
@@ -58,30 +58,20 @@ export const GET = async (req: Request) => {
       });
     }
 
-    // Validate creator wallet address
-    try {
-      new PublicKey(meeting.creatorWallet);
-    } catch {
-      return new Response(JSON.stringify({ error: "Invalid creator wallet address" }), {
-        status: 400,
-        headers,
-      });
-    }
-
-    const baseUrl = url.origin;
+    const baseUrl = url.origin;  // https://kibby.vercel.app
 
     const response: ActionGetResponse = {
       type: "action",
-      icon: `${baseUrl}/static/ticket.png`,
-      label: "Book Meeting",
+      icon: `${baseUrl}/next.svg`,
+      label: "Trusted by Kibby",
       title: `Book ${meeting.title}`,
-      description: `Pay ${meeting.price} SOL to book this meeting. ${meeting.description || ''}`,
+      description: `Pay ${meeting.price} SOL to book a ${meeting.title} meeting.`,
       links: {
         actions: [
           {
             type: "transaction",
-            label: `Pay ${meeting.price} SOL`,
-            href: `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}`,
+            label: `${meeting.price} SOL`,
+            href: `${baseUrl}/api/actions/book-meeting?meetingId=${meetingId}&amount=${meeting.price}`,  // Absolute
           },
         ],
       },
@@ -120,42 +110,19 @@ export const POST = async (req: Request) => {
       select: { creatorWallet: true, price: true, title: true }
     });
 
-    if (!meeting) {
-      return new Response(JSON.stringify({ error: "Meeting not found" }), {
-        status: 404,
-        headers,
-      });
-    }
-
-    if (amount < meeting.price) {
-      return new Response(JSON.stringify({ error: "Insufficient amount" }), {
-        status: 400,
-        headers,
-      });
-    }
-
-    // Validate creator wallet address
-    try {
-      new PublicKey(meeting.creatorWallet);
-    } catch {
-      return new Response(JSON.stringify({ error: "Invalid creator wallet address" }), {
+    if (!meeting || amount < meeting.price) {
+      return new Response(JSON.stringify({ error: "Meeting not found or insufficient amount" }), {
         status: 400,
         headers,
       });
     }
 
     const request: ActionPostRequest = await req.json();
-    
-    if (!request.account) {
-      return new Response(JSON.stringify({ error: "Account required" }), {
-        status: 400,
-        headers,
-      });
-    }
-
     const payer = new PublicKey(request.account);
+
     const receiver = new PublicKey(meeting.creatorWallet);
 
+    // Create pending booking for immediate dashboard visibility
     const pendingBooking = await db.booking.create({
       data: {
         meetingId,
@@ -179,10 +146,7 @@ export const POST = async (req: Request) => {
       message: `Booking ${meeting.title} for ${amount} SOL`,
     };
 
-    return new Response(JSON.stringify(response), {
-      status: 200,
-      headers,
-    });
+    return Response.json(response, { status: 200, headers });
   } catch (error) {
     console.error("Error processing request:", error);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
