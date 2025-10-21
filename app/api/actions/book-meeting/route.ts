@@ -1,4 +1,4 @@
-// app/api/actions/book-meeting/route.ts (fixed: Simplified like donate-sol, finalized blockhash, no memo to avoid signing issues, pending booking wrapped)
+// app/api/actions/book-meeting/route.ts (adapted from donate-sol: Simple tx, finalized blockhash, no memo for signing, pending booking wrapped for dashboard)
 import {
   ActionGetResponse,
   ActionPostRequest,
@@ -120,23 +120,17 @@ export const POST = async (req: Request) => {
 
     const receiver = new PublicKey(meeting.creatorWallet);
 
-    // Create pending booking for immediate dashboard visibility (wrapped in try-catch)
-    let pendingBookingId: string | null = null;
-    try {
-      const pendingBooking = await db.booking.create({
-        data: {
-          meetingId,
-          userWallet: payer.toBase58(),
-          status: "pending",
-          transactionSig: "blink-pending", 
-        },
-      });
-      pendingBookingId = pendingBooking.id;
-      console.log(`Pending booking created: ${pendingBooking.id}`);
-    } catch (dbError) {
-      console.error("DB error for pending booking:", dbError);
-      // Continue without booking if DB fails (tx still works)
-    }
+    // Create pending booking for immediate dashboard visibility
+    const pendingBooking = await db.booking.create({
+      data: {
+        meetingId,
+        userWallet: payer.toBase58(),
+        status: "pending",
+        transactionSig: "blink-pending", 
+      },
+    });
+
+    console.log(`Pending booking created for Blink: ${pendingBooking.id}`);
 
     const transaction = await prepareTransaction(
       connection,
@@ -145,64 +139,13 @@ export const POST = async (req: Request) => {
       amount
     );
 
+    const response: ActionPostResponse = {
+      type: "transaction",
+      transaction: Buffer.from(transaction.serialize()).toString("base64"),
+      message: `Booking ${meeting.title} for ${amount} SOL`,
+    };
 
-    // In POST, after transaction = await prepareTransaction(...)
-console.log(`Polling for tx confirmation for user ${payer.toBase58()}...`);
-
-let confirmedSig: string | null = null;
-const startTime = Date.now();
-while (Date.now() - startTime < 5000) {  // 5s timeout
-  const signatures = await connection.getSignaturesForAddress(payer, { limit: 3 });
-  for (const sigInfo of signatures) {
-    if (sigInfo.confirmationStatus === 'confirmed') {
-      const tx = await connection.getTransaction(sigInfo.signature, { commitment: 'confirmed' });
-      if (tx && tx.meta && !tx.meta.err) {  // Check transaction success
-        confirmedSig = sigInfo.signature;
-        break;
-      }
-    }
-  }
-  if (confirmedSig) break;
-  await new Promise(resolve => setTimeout(resolve, 500));  // Poll every 0.5s
-}
-
-if (confirmedSig) {
-  // Create confirmed booking
-  const booking = await db.booking.create({
-    data: {
-      meetingId,
-      userWallet: payer.toBase58(),
-      status: 'confirmed',
-      transactionSig: confirmedSig,
-      bookedAt: new Date(),
-    },
-  });
-
-  // Optional: Mint NFT here
-  // mintBookingNft(meeting, payer.toBase58());
-
-  console.log(`Confirmed booking: ${booking.id}`);
-} else {
-  console.log('Tx not confirmed in time – try manual');
-}
-
-// Response (tx for signing)
-const response: ActionPostResponse = {
-  type: "transaction",
-  transaction: Buffer.from(transaction.serialize()).toString("base64"),
-  message: `Booking ${meeting.title} for ${amount} SOL`,
-};
-
-return Response.json(response, { status: 200, headers });
-
-
-    // const response: ActionPostResponse = {
-    //   type: "transaction",
-    //   transaction: Buffer.from(transaction.serialize()).toString("base64"),
-    //   message: `Booking ${meeting.title} for ${amount} SOL`,
-    // };
-
-    // return Response.json(response, { status: 200, headers });
+    return Response.json(response, { status: 200, headers });
   } catch (error) {
     console.error("Error processing request:", error);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
