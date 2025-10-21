@@ -1,3 +1,4 @@
+// app/api/actions/book-meeting/route.ts (fixed: Simplified like donate-sol, finalized blockhash, no memo to avoid signing issues, pending booking wrapped)
 import {
   ActionGetResponse,
   ActionPostRequest,
@@ -15,12 +16,11 @@ import {
   VersionedTransaction,
 } from "@solana/web3.js";
 
-// Import your Prisma client
 import { db } from '@/lib/db';
 
 const blockchain = BLOCKCHAIN_IDS.devnet;
 
-const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL || "https://api.devnet.solana.com", "confirmed"); // Set a default commitment level
+const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL || "https://api.devnet.solana.com");
 
 const headers = {
   ...ACTIONS_CORS_HEADERS,
@@ -60,7 +60,7 @@ export const GET = async (req: Request) => {
 
     const response: ActionGetResponse = {
       type: "action",
-      icon: `${baseUrl}/next.svg`, // Ensure this path is correct for your project
+      icon: `${baseUrl}/next.svg`,
       label: `${meeting.price} SOL`,
       title: `Book ${meeting.title}`,
       description: `Pay ${meeting.price} SOL to book a ${meeting.title} meeting.`,
@@ -88,13 +88,10 @@ export const GET = async (req: Request) => {
   }
 };
 
-// app/api/actions/book-meeting/route.ts (only showing changes in POST)
-
-// ... (imports and other GET/OPTIONS code remain the same) ...
-
 export const POST = async (req: Request) => {
   try {
     const url = new URL(req.url);
+
     const meetingId = url.searchParams.get("meetingId");
     const amountParam = url.searchParams.get("amount");
     const amount = Number(amountParam);
@@ -123,17 +120,23 @@ export const POST = async (req: Request) => {
 
     const receiver = new PublicKey(meeting.creatorWallet);
 
-    // Create pending booking
-    const pendingBooking = await db.booking.create({
-      data: {
-        meetingId,
-        userWallet: payer.toBase58(),
-        status: "pending",
-        transactionSig: "pending-blink-tx", // This will be updated by the webhook
-      },
-    });
-
-    console.log(`Pending booking created for Blink: ${pendingBooking.id}`);
+    // Create pending booking for immediate dashboard visibility (wrapped in try-catch)
+    let pendingBookingId: string | null = null;
+    try {
+      const pendingBooking = await db.booking.create({
+        data: {
+          meetingId,
+          userWallet: payer.toBase58(),
+          status: "pending",
+          transactionSig: "blink-pending", 
+        },
+      });
+      pendingBookingId = pendingBooking.id;
+      console.log(`Pending booking created: ${pendingBooking.id}`);
+    } catch (dbError) {
+      console.error("DB error for pending booking:", dbError);
+      // Continue without booking if DB fails (tx still works)
+    }
 
     const transaction = await prepareTransaction(
       connection,
@@ -142,14 +145,64 @@ export const POST = async (req: Request) => {
       amount
     );
 
-    const response: ActionPostResponse = {
-      type: "transaction",
-      transaction: Buffer.from(transaction.serialize()).toString("base64"),
-      // Add booking ID to message for user feedback and potential debugging
-      message: `Booking ${meeting.title} for ${amount} SOL (Booking ID: ${pendingBooking.id}).`,
-    };
 
-    return Response.json(response, { status: 200, headers });
+    // In POST, after transaction = await prepareTransaction(...)
+console.log(`Polling for tx confirmation for user ${payer.toBase58()}...`);
+
+let confirmedSig: string | null = null;
+const startTime = Date.now();
+while (Date.now() - startTime < 5000) {  // 5s timeout
+  const signatures = await connection.getSignaturesForAddress(payer, { limit: 3 });
+  for (const sigInfo of signatures) {
+    if (sigInfo.confirmationStatus === 'confirmed') {
+      const tx = await connection.getTransaction(sigInfo.signature, { commitment: 'confirmed' });
+      if (tx && tx.meta && !tx.meta.err) {  // Check transaction success
+        confirmedSig = sigInfo.signature;
+        break;
+      }
+    }
+  }
+  if (confirmedSig) break;
+  await new Promise(resolve => setTimeout(resolve, 500));  // Poll every 0.5s
+}
+
+if (confirmedSig) {
+  // Create confirmed booking
+  const booking = await db.booking.create({
+    data: {
+      meetingId,
+      userWallet: payer.toBase58(),
+      status: 'confirmed',
+      transactionSig: confirmedSig,
+      bookedAt: new Date(),
+    },
+  });
+
+  // Optional: Mint NFT here
+  // mintBookingNft(meeting, payer.toBase58());
+
+  console.log(`Confirmed booking: ${booking.id}`);
+} else {
+  console.log('Tx not confirmed in time – try manual');
+}
+
+// Response (tx for signing)
+const response: ActionPostResponse = {
+  type: "transaction",
+  transaction: Buffer.from(transaction.serialize()).toString("base64"),
+  message: `Booking ${meeting.title} for ${amount} SOL`,
+};
+
+return Response.json(response, { status: 200, headers });
+
+
+    // const response: ActionPostResponse = {
+    //   type: "transaction",
+    //   transaction: Buffer.from(transaction.serialize()).toString("base64"),
+    //   message: `Booking ${meeting.title} for ${amount} SOL`,
+    // };
+
+    // return Response.json(response, { status: 200, headers });
   } catch (error) {
     console.error("Error processing request:", error);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
@@ -158,8 +211,6 @@ export const POST = async (req: Request) => {
     });
   }
 };
-
-// ... (prepareTransaction function remains the same) ...
 
 const prepareTransaction = async (
   connection: Connection,
@@ -174,14 +225,14 @@ const prepareTransaction = async (
     lamports: amount * LAMPORTS_PER_SOL,
   });
 
-  // Get the latest blockhash with 'finalized' commitment for better reliability
+  // Get the latest blockhash with 'finalized' commitment for reliable signing
   const { blockhash } = await connection.getLatestBlockhash("finalized");
 
   // Create a transaction message
   const message = new TransactionMessage({
     payerKey: payer,
     recentBlockhash: blockhash,
-    instructions: [transferIx], // Only transfer instruction for simplicity and to avoid payer sig issues with memo
+    instructions: [transferIx],
   }).compileToV0Message();
 
   return new VersionedTransaction(message);
