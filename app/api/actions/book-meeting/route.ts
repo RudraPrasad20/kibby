@@ -22,7 +22,7 @@ import { db } from "@/lib/db";
 const blockchain = BLOCKCHAIN_IDS.devnet;
 
 // Create connection to Solana
-const connection = new Connection("https://api.devnet.solana.com");
+const connection = new Connection(process.env.NEXT_PUBLIC_RPC_URL || "https://api.devnet.solana.com");
 
 // Headers for CORS + Blink metadata
 const headers = {
@@ -66,7 +66,7 @@ export const GET = async (req: Request) => {
 
   const response: ActionGetResponse = {
     type: "action",
-    icon: `${baseUrl}logo.png`, // absolute HTTPS path
+    icon: `${baseUrl}/static/ticket.png`, // absolute HTTPS path
     label: `${meeting.price} SOL`,
     title: `Book ${meeting.title}`,
     description: `Pay ${meeting.price} SOL to book this meeting.`,
